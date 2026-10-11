@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Troféu Jardim dos Ipês · Personalizar</title>
+  <!-- Arquivo-fonte. O personalizar.html (usado de fato) é gerado com a biblioteca embutida: rode build-personalizar.ps1 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400..800&display=swap">
+  <style>
+    :root { --navy: #284085; --ink: #15203a; --muted: #5a6478; --line: #e2e7f0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Plus Jakarta Sans", system-ui, sans-serif; color: var(--ink); background: #f2f5fa; display: grid; grid-template-columns: 360px 1fr; height: 100vh; }
+    aside { background: #fff; border-right: 1px solid var(--line); padding: 20px; overflow: auto; }
+    h1 { font-size: 1.15rem; margin: 0 0 4px; color: var(--navy); }
+    p.sub { margin: 0 0 14px; color: var(--muted); font-size: .85rem; line-height: 1.45; }
+    label, .lbl { display: block; font-weight: 700; font-size: .85rem; margin: 16px 0 6px; }
+    .hint { font-size: .78rem; color: var(--muted); font-weight: 400; margin-top: 4px; line-height: 1.4; }
+    input[type=file] { width: 100%; font: inherit; font-size: .85rem; }
+    .pos { display: flex; gap: 8px; }
+    .pos button { flex: 1; padding: 10px 0; border: 2px solid var(--line); background: #fff; border-radius: 10px; font: inherit; font-weight: 800; font-size: 1.05rem; cursor: pointer; color: var(--ink); }
+    .pos button[aria-pressed=true] { border-color: var(--navy); background: var(--navy); color: #fff; }
+    .colors { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; font-size: .85rem; }
+    .colors input { width: 44px; height: 28px; border: 1px solid var(--line); border-radius: 6px; padding: 0; background: none; }
+    .swatch { display: inline-block; width: 28px; height: 20px; border-radius: 5px; border: 1px solid #0002; vertical-align: middle; }
+    input[type=range] { width: 100%; }
+    .btn { display: block; width: 100%; margin-top: 10px; padding: 12px; border: 0; border-radius: 999px; font: inherit; font-weight: 800; cursor: pointer; }
+    .btn-primary { background: var(--navy); color: #fff; }
+    .btn-ghost { background: #fff; color: var(--navy); border: 2px solid var(--line); }
+    .btn:disabled { opacity: .5; cursor: default; }
+    #preview2d { margin-top: 8px; width: 100%; background: repeating-conic-gradient(#fff 0 25%, #eef1f6 0 50%) 0 0/14px 14px; border: 1px solid var(--line); border-radius: 8px; }
+    .check { margin-top: 14px; padding: 10px 12px; border-radius: 10px; font-size: .82rem; line-height: 1.45; background: #f2f5fa; }
+    .check.ok { background: #e6f6ec; } .check.warn { background: #fff4e0; } .check.bad { background: #fde8e8; }
+    #status { margin-top: 12px; font-size: .8rem; color: var(--muted); min-height: 1.2em; }
+    details { margin-top: 16px; font-size: .82rem; color: var(--muted); line-height: 1.5; }
+    details summary { font-weight: 700; color: var(--ink); cursor: pointer; }
+    main { position: relative; }
+    #view { position: absolute; inset: 0; }
+    .viewbtns { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; }
+    .viewbtns button { padding: 8px 12px; border: 0; border-radius: 999px; background: #fff; font: inherit; font-weight: 700; font-size: .8rem; color: var(--navy); cursor: pointer; box-shadow: 0 2px 8px #0002; }
+    .legend { position: absolute; left: 16px; bottom: 16px; background: rgba(255,255,255,.92); padding: 8px 12px; border-radius: 10px; font-size: .8rem; color: var(--muted); }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+  </script>
+</head>
+<body>
+  <aside>
+    <h1>Troféu Jardim dos Ipês</h1>
+    <p class="sub">Gera a <b>placa da imobiliária</b> (logo + posição). O prédio, a base e as placas do Jardim dos Ipês e da M91 já estão prontos e não mudam.</p>
+
+    <div id="baseBox" hidden>
+      <label>Arquivos do modelo-base</label>
+      <input type="file" id="baseFiles" accept=".stl,.json" multiple>
+      <div class="hint">Selecione <b>trofeu-base.stl</b> e <b>trofeu-base.json</b> (e, se quiser a prévia colorida, os três <b>previa-*.stl</b>). Só é pedido quando a página é aberta direto do disco.</div>
+    </div>
+
+    <label for="logo">Logo da imobiliária</label>
+    <input type="file" id="logo" accept="image/png,image/jpeg,image/svg+xml,image/webp">
+    <div class="hint">PNG com fundo transparente é o ideal; JPG com fundo branco também funciona. O logo vira relevo de uma cor só.</div>
+    <button class="btn btn-ghost" id="sample" type="button">Usar logo de exemplo</button>
+    <canvas id="preview2d" width="320" height="80"></canvas>
+
+    <span class="lbl">Posição</span>
+    <div class="pos" role="group" aria-label="Posição">
+      <button type="button" data-pos="1º" aria-pressed="true">1º</button>
+      <button type="button" data-pos="2º" aria-pressed="false">2º</button>
+      <button type="button" data-pos="3º" aria-pressed="false">3º</button>
+    </div>
+
+    <span class="lbl">Cores (só para a prévia; na impressão, valem os filamentos)</span>
+    <div class="colors">
+      <span>Prédio, base e fundo das placas</span><input type="color" id="cBase" value="#e9e5dc">
+      <span>Imobiliária e posição</span><input type="color" id="cImo" value="#c2410c">
+      <span>Jardim dos Ipês <span class="swatch" style="background:#f2c200"></span></span><span></span>
+      <span>M91 <span class="swatch" style="background:#284085"></span></span><span></span>
+    </div>
+
+    <label for="thick">Engrossar traços do logo: <span id="thickVal">0,10</span> mm</label>
+    <input type="range" id="thick" min="0" max="0.4" step="0.02" value="0.1">
+
+    <div class="check" id="check">Escolha um logo para ver a análise de impressão.</div>
+
+    <button class="btn btn-primary" id="download" disabled>Baixar placa da imobiliária (2 arquivos)</button>
+    <div id="status"></div>
+
+    <details>
+      <summary>Como imprimir</summary>
+      <p><b>Prédio + base</b> (<i>trofeu-base.stl</i>): em pé, cor neutra. Feito uma vez.</p>
+      <p><b>Placas fixas</b>: importe juntos <i>placas-fixas-1-fundo</i> (neutro), <i>-2-amarelo</i> e <i>-3-azul</i>; o fatiador pergunta se é um objeto com várias partes: <b>sim</b>. Dê uma cor a cada parte e imprima deitado. Feito uma vez.</p>
+      <p><b>Placa da imobiliária</b>: importe juntos os 2 arquivos baixados aqui (fundo neutro + logo na cor da imobiliária), do mesmo jeito.</p>
+      <p>Impressora de uma cor só: imprima a placa e pause na camada de <b>1,6 mm</b> para trocar o filamento.</p>
+      <p>Encaixe as placas nos rebaixos (folga de 0,2 mm) e cole com cola instantânea (gel).</p>
+    </details>
+  </aside>
+
+  <main>
+    <div id="view"></div>
+    <div class="viewbtns"><button data-v="frente">Frente</button><button data-v="tres4">3/4</button><button data-v="placa">Placa</button></div>
+    <div class="legend">Arraste para girar · roda para zoom</div>
+  </main>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+    import * as L from './trofeu-lib.js';
+
+    const $ = (id) => document.getElementById(id);
+    const status = (t) => { $('status').textContent = t; };
+
+    // ---------- visualização ----------
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    $('view').appendChild(renderer.domElement);
+    const scene = new THREE.Scene(); scene.background = new THREE.Color(0xe8eef6);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8170, 1.0));
+    const sun = new THREE.DirectionalLight(0xffffff, 2.4); sun.position.set(-400, -250, 200); scene.add(sun);
+    const fill = new THREE.DirectionalLight(0xcfe0ff, 0.6); fill.position.set(300, -200, 100); scene.add(fill);
+    const camera = new THREE.PerspectiveCamera(35, 1, 1, 5000); camera.up.set(0, 0, 1);
+    const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
+    function resize() { const r = $('view').getBoundingClientRect(); renderer.setSize(r.width, r.height); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); }
+    addEventListener('resize', resize); resize();
+    (function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+    const mat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: .8, side: THREE.DoubleSide, flatShading: true });
+    const mBase = mat($('cBase').value), mImo = mat($('cImo').value), mYellow = mat(0xf2c200), mBlue = mat(0x284085);
+    $('cBase').addEventListener('input', e => mBase.color.set(e.target.value));
+    $('cImo').addEventListener('input', e => mImo.color.set(e.target.value));
+
+    // ---------- estado ----------
+    let layout = null, bounds = null, logoMask = null, logoName = '', position = '1º', plate = null;
+    const persMeshes = [];
+    const fileBase = () => 'placa-imobiliaria-' + position.replace('º', 'o') + '-lugar' + (logoName ? '-' + logoName : '');
+
+    function addMesh(buf, material) { const g = new STLLoader().parse(buf); const m = new THREE.Mesh(g, material); scene.add(m); return g; }
+
+    function setView(v) {
+      if (!bounds) return;
+      const c = bounds.getCenter(new THREE.Vector3()), s = bounds.getSize(new THREE.Vector3()), k = 1 / Math.min(1, camera.aspect);
+      if (v === 'placa' && layout) {
+        const p = layout.rebaixos.imobiliaria, t = new THREE.Vector3(...p.center), o = new THREE.Vector3(...p.out);
+        controls.target.copy(t); camera.position.copy(t).addScaledVector(o, p.w * 1.6 * k).add(new THREE.Vector3(0, 0, 10));
+      } else if (v === 'frente') {
+        controls.target.set(c.x, c.y, c.z * 0.75); camera.position.set(c.x, c.y - s.length() * 1.25 * k, c.z * 0.9);
+      } else {
+        const d = s.length() * 1.25 * k; controls.target.set(c.x, c.y, c.z * 0.6); camera.position.set(c.x - d * 0.45, c.y - d, c.z + d * 0.28);
+      }
+      controls.update();
+    }
+    document.querySelectorAll('.viewbtns button').forEach(b => b.addEventListener('click', () => setView(b.dataset.v)));
+
+    async function loadAll(get) {
+      const base = await get('trofeu-base.stl'); layout = JSON.parse(new TextDecoder().decode(await get('trofeu-base.json')));
+      if (layout.versao !== 2) throw new Error('trofeu-base.json é de uma versão antiga; gere o modelo-base de novo.');
+      const g = addMesh(base, mBase); g.computeBoundingBox(); bounds = g.boundingBox;
+      for (const [f, m] of [['previa-fundo.stl', mBase], ['previa-amarelo.stl', mYellow], ['previa-azul.stl', mBlue]]) { try { addMesh(await get(f), m); } catch { /* prévia é opcional */ } }
+      // espera o layout da página assentar antes de enquadrar (senão a proporção da tela sai errada)
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      resize(); setView('tres4');
+      status('Modelo-base carregado (' + bounds.getSize(new THREE.Vector3()).toArray().map(v => v.toFixed(0)).join(' × ') + ' mm).');
+      rebuild();
+    }
+    try {
+      await loadAll(async (f) => { const r = await fetch(f); if (!r.ok) throw new Error(f); return r.arrayBuffer(); });
+    } catch (e) {
+      if (layout) status(e.message); else { $('baseBox').hidden = false; status('Selecione os arquivos do modelo-base.'); }
+    }
+    $('baseFiles').addEventListener('change', async (e) => {
+      const files = Object.fromEntries([...e.target.files].map(f => [f.name, f]));
+      if (!files['trofeu-base.stl'] || !files['trofeu-base.json']) { status('Faltam trofeu-base.stl e/ou trofeu-base.json.'); return; }
+      try { await loadAll(async (n) => { if (!files[n]) throw new Error(n); return files[n].arrayBuffer(); }); $('baseBox').hidden = true; } catch (err) { status(err.message); }
+    });
+
+    // ---------- entradas ----------
+    function setLogo(canvas, name) {
+      logoName = name;
+      const m0 = L.canvasToMask(canvas);
+      let x0 = m0.W, y0 = m0.H, x1 = -1, y1 = -1;
+      for (let y = 0; y < m0.H; y++) for (let x = 0; x < m0.W; x++) if (m0.mask[y * m0.W + x]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+      if (x1 < 0) { $('check').className = 'check bad'; $('check').textContent = 'Não encontrei o desenho do logo nessa imagem.'; logoMask = null; return; }
+      const W = x1 - x0 + 1, H = y1 - y0 + 1, m = new Uint8Array(W * H);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) m[y * W + x] = m0.mask[(y + y0) * m0.W + x + x0];
+      logoMask = { W, H, mask: m };
+      const pc = $('preview2d'), k = Math.min(pc.width / W, pc.height / H), ctx = pc.getContext('2d'), img = ctx.createImageData(pc.width, pc.height);
+      for (let y = 0; y < pc.height; y++) for (let x = 0; x < pc.width; x++) { const sx = Math.floor((x - (pc.width - W * k) / 2) / k), sy = Math.floor((y - (pc.height - H * k) / 2) / k); if (sx >= 0 && sy >= 0 && sx < W && sy < H && m[sy * W + sx]) img.data.set([40, 64, 133, 255], (y * pc.width + x) * 4); }
+      ctx.putImageData(img, 0, 0);
+      rebuild();
+    }
+    $('logo').addEventListener('change', async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      setLogo(await L.imageToCanvas(f, 3000, 1200), f.name.replace(/\.[^.]+$/, '').normalize('NFD').replace(/[^\w-]+/g, '-').toLowerCase().slice(0, 30));
+    });
+    $('sample').addEventListener('click', async () => {
+      // logo fictício, só para demonstração
+      await document.fonts.load('800 100px "Plus Jakarta Sans"');
+      const c = new OffscreenCanvas(1800, 600), x = c.getContext('2d');
+      x.fillStyle = '#c2410c';
+      x.beginPath(); x.moveTo(60, 300); x.lineTo(270, 90); x.lineTo(480, 300); x.lineTo(430, 300); x.lineTo(430, 520); x.lineTo(110, 520); x.lineTo(110, 300); x.closePath(); x.fill();
+      x.clearRect(230, 380, 80, 140);
+      x.font = '800 150px "Plus Jakarta Sans"'; x.fillText('IMOBILIÁRIA', 540, 300);
+      x.font = '800 190px "Plus Jakarta Sans"'; x.fillText('EXEMPLO', 540, 500);
+      setLogo(c, 'exemplo');
+    });
+    document.querySelectorAll('.pos button').forEach(b => b.addEventListener('click', () => {
+      document.querySelectorAll('.pos button').forEach(o => o.setAttribute('aria-pressed', o === b)); position = b.dataset.pos; rebuild();
+    }));
+    $('thick').addEventListener('input', (e) => { $('thickVal').textContent = (+e.target.value).toFixed(2).replace('.', ','); });
+    $('thick').addEventListener('change', rebuild);
+
+    // ---------- geração da placa ----------
+    let busy = false, again = false;
+    async function rebuild() {
+      if (!layout || !logoMask) return;
+      if (busy) { again = true; return; } busy = true;
+      status('Gerando…'); await new Promise(r => setTimeout(r, 30));
+      try {
+        await document.fonts.load('800 100px "Plus Jakarta Sans"');
+        const P = layout.imobiliaria;
+        const posMask = L.textToMask([{ text: position, heightMm: 20, weight: 800, family: 'Plus Jakarta Sans' }, { text: 'LUGAR', heightMm: 5, weight: 800, family: 'Plus Jakarta Sans', gapMm: 2 }]);
+        plate = L.makePlate(P.w, P.h, [
+          { mask: posMask, fit: P.posicao.fit, at: P.posicao.at, thickenMm: 0.05 },
+          { mask: logoMask, fit: P.logo.fit, at: P.logo.at, thickenMm: +$('thick').value },
+        ]);
+        persMeshes.splice(0).forEach(m => scene.remove(m));
+        const pk = layout.rebaixos.imobiliaria;
+        persMeshes.push(new THREE.Mesh(L.placeInPocket(plate.tile, pk), mBase), new THREE.Mesh(L.placeInPocket(plate.relief, pk), mImo));
+        persMeshes.forEach(m => scene.add(m));
+        // análise de impressão (do logo da imobiliária)
+        const MIN = String(L.MIN_FEATURE_MM).replace('.', ','), lg = plate.thin[1], thin = lg.thinAfter, el = $('check');
+        const sz = lg.size.map(v => v.toFixed(1).replace('.', ',')).join(' × ');
+        if (thin < 0.02) { el.className = 'check ok'; el.innerHTML = `<b>Pronto para imprimir.</b> Logo com ${sz} mm, relevo de ${L.RELIEF_MM} mm. Nenhuma parte relevante abaixo de ${MIN} mm.`; }
+        else if (thin < 0.08) { el.className = 'check warn'; el.innerHTML = `<b>Atenção:</b> ${(thin * 100).toFixed(1).replace('.', ',')}% do logo tem traços abaixo de ${MIN} mm e pode falhar em impressora de filamento. Aumente “Engrossar traços” ou imprima a placa em resina. Logo com ${sz} mm.`; }
+        else { el.className = 'check bad'; el.innerHTML = `<b>Logo fino demais:</b> ${(thin * 100).toFixed(1).replace('.', ',')}% do desenho tem traços abaixo de ${MIN} mm. Aumente “Engrossar traços” ou use uma versão simplificada do logo (sem textos pequenos). Logo com ${sz} mm.`; }
+        $('download').disabled = false;
+        status('Atualizado.');
+      } catch (err) { console.error(err); status('Erro ao gerar: ' + err.message); }
+      busy = false; if (again) { again = false; rebuild(); }
+    }
+
+    function download(buf, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type: 'model/stl' })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
+    $('download').addEventListener('click', () => {
+      download(L.toSTL(plate.tile), fileBase() + '-1-fundo.stl');
+      setTimeout(() => download(L.toSTL(plate.relief), fileBase() + '-2-logo.stl'), 400);
+    });
+    // para gerar exemplos automaticamente
+    window.trofeu = { setPosition: (p) => document.querySelector(`.pos button[data-pos="${p}"]`).click(), sample: () => $('sample').click(), ready: () => !!plate && !busy, plate: () => plate, fileBase, setView, L };
+  </script>
+</body>
+</html>

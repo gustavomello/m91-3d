@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Jardim dos Ipês em 3D | M91 Engenharia</title>
+  <meta name="description" content="Explore o Jardim dos Ipês, em Pelotas, em 3D. Arraste para girar e aproxime para ver os detalhes.">
+  <meta name="theme-color" content="#284085">
+  <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+  <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png">
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400..800&display=swap">
+  <style>
+    :root {
+      --navy: #284085;
+      --navy-900: #121d40;
+      --cyan: #03b6ce;
+      --muted: #5a6478;
+      --font: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #dfe8f3; font-family: var(--font); color: var(--navy-900); }
+    /* o canvas ocupa a tela toda; touch-action none deixa os gestos para o visualizador */
+    #viewer { position: fixed; inset: 0; touch-action: none; }
+    #viewer canvas { display: block; width: 100%; height: 100%; outline: none; }
+
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 2;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+      background: linear-gradient(180deg, rgba(18,29,64,.75), rgba(18,29,64,0));
+      color: #fff; pointer-events: none;
+    }
+    .topbar img { width: 112px; height: auto; display: block; }
+    .topbar h1 { margin: 0; font-size: .95rem; font-weight: 800; letter-spacing: -.01em; text-align: right; line-height: 1.2; }
+    .topbar h1 small { display: block; font-size: .72rem; font-weight: 600; opacity: .85; }
+
+    .controls {
+      position: fixed; z-index: 2; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom));
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .controls button {
+      width: 48px; height: 48px; border-radius: 50%; border: 0;
+      background: #fff; color: var(--navy); box-shadow: 0 6px 18px -6px rgba(18,29,64,.45);
+      display: grid; place-items: center; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+    .controls button:active { transform: scale(.95); }
+    .controls svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    .hint {
+      position: fixed; z-index: 2; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+      background: rgba(18,29,64,.85); color: #fff; font-size: .82rem; font-weight: 600;
+      padding: .7em 1.1em; border-radius: 999px; white-space: nowrap; pointer-events: none;
+      transition: opacity .6s;
+    }
+    .hint.hide { opacity: 0; }
+    @media (max-width: 440px) { .hint { white-space: normal; text-align: center; width: calc(100% - 96px); left: 16px; transform: none; border-radius: 16px; } }
+
+    .status {
+      position: fixed; inset: 0; z-index: 3; display: grid; place-items: center; text-align: center; padding: 24px;
+      background: #dfe8f3; transition: opacity .5s;
+    }
+    .status.hide { opacity: 0; pointer-events: none; }
+    .status p { margin: 12px 0 0; color: var(--muted); font-size: .95rem; max-width: 32em; }
+    .status strong { font-size: 1.05rem; color: var(--navy-900); }
+    .bar { width: 220px; height: 6px; border-radius: 3px; background: rgba(40,64,133,.15); overflow: hidden; margin: 16px auto 0; }
+    .bar span { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+    .status.error .bar { display: none; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="viewer"></div>
+
+  <header class="topbar">
+    <img src="img/logo-branco.webp" alt="M91 Engenharia" width="160" height="43">
+    <h1>Jardim dos Ipês<small>Pelotas/RS · Imagem meramente ilustrativa</small></h1>
+  </header>
+
+  <div class="controls">
+    <button id="reset" aria-label="Voltar à vista inicial" title="Vista inicial">
+      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+    </button>
+  </div>
+
+  <p class="hint" id="hint">Arraste para girar · pinça ou roda para zoom · dois dedos para mover</p>
+
+  <div class="status" id="status" role="status">
+    <div>
+      <strong id="status-title">Carregando o modelo 3D…</strong>
+      <div class="bar"><span id="progress"></span></div>
+      <p id="status-text">Isso pode levar alguns segundos no celular.</p>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+    // Modelo exportado do 3ds Max. Aceita .stl (só geometria) ou .glb (com materiais).
+    // Para testar outro arquivo: 3d.html?modelo=caminho/arquivo.stl
+    const MODEL_URL = new URLSearchParams(location.search).get('modelo') || 'modelos/jardim-dos-ipes.drc';
+
+    const container = document.getElementById('viewer');
+    const statusEl = document.getElementById('status');
+    const progressEl = document.getElementById('progress');
+    const hintEl = document.getElementById('hint');
+
+    // ---------- cena ----------
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    // celulares de entrada: limita a resolução para manter o movimento fluido
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xdfe8f3);
+
+    // céu em degradê (textura pequena, custo zero de desempenho)
+    {
+      const c = document.createElement('canvas'); c.width = 2; c.height = 256;
+      const ctx = c.getContext('2d'); const grd = ctx.createLinearGradient(0, 0, 0, 256);
+      grd.addColorStop(0, '#7fa6d6'); grd.addColorStop(0.6, '#cfdeee'); grd.addColorStop(1, '#eef2f6');
+      ctx.fillStyle = grd; ctx.fillRect(0, 0, 2, 256);
+      const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+      scene.background = tex;
+    }
+
+    // iluminação: céu/chão suave + sol lateral forte, para as fachadas terem contraste
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+    scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x8a8170, 0.9));
+    const sun = new THREE.DirectionalLight(0xfff4e5, 2.6);
+    sun.position.set(1, 2, 1.2);
+    scene.add(sun);
+    const fill = new THREE.DirectionalLight(0xbfd4ff, 0.5); // luz de preenchimento do lado oposto
+    fill.position.set(-1, 0.6, -0.8);
+    scene.add(fill);
+
+    const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 5000);
+    camera.position.set(30, 25, 30);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.screenSpacePanning = true;
+    controls.maxPolarAngle = Math.PI * 0.49; // não deixa a câmera passar para baixo do chão
+    controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+
+    // ---------- render sob demanda (economiza bateria) ----------
+    let needsRender = true;
+    const requestRender = () => { needsRender = true; };
+    controls.addEventListener('change', requestRender);
+    function loop() {
+      requestAnimationFrame(loop);
+      // o amortecimento precisa de update a cada quadro enquanto ainda está se movendo
+      if (controls.update() || needsRender) {
+        renderer.render(scene, camera);
+        needsRender = false;
+      }
+    }
+    loop();
+
+    function onResize() {
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      requestRender();
+    }
+    window.addEventListener('resize', onResize);
+
+    // ---------- enquadrar o modelo ----------
+    const home = { position: new THREE.Vector3(), target: new THREE.Vector3() };
+
+    // Direção mais comprida da planta (análise de componentes principais no plano do chão).
+    // A câmera inicial fica de frente para essa direção, mostrando a fachada longa.
+    function longAxis(object, center) {
+      let sxx = 0, szz = 0, sxz = 0, n = 0;
+      const v = new THREE.Vector3();
+      object.updateWorldMatrix(true, true);
+      object.traverse((m) => {
+        if (!m.isMesh) return;
+        const pos = m.geometry.attributes.position;
+        const step = Math.max(1, Math.floor(pos.count / 20000)); // amostra: rápido mesmo em celular
+        for (let i = 0; i < pos.count; i += step) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld).sub(center);
+          sxx += v.x * v.x; szz += v.z * v.z; sxz += v.x * v.z; n++;
+        }
+      });
+      if (!n) return new THREE.Vector3(1, 0, 0);
+      const angle = 0.5 * Math.atan2(2 * sxz, sxx - szz);
+      return new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+    }
+
+    function frame(object) {
+      const box = new THREE.Box3().setFromObject(object);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const radius = size.length() / 2;
+      const fov = THREE.MathUtils.degToRad(camera.fov);
+      // distância para caber na tela, considerando também telas em pé (celular)
+      const fit = radius / Math.sin(fov / 2) / Math.min(1, camera.aspect) * 0.85;
+      // perpendicular ao eixo longo, inclinada uns 30° para baixo e girada 25° para dar profundidade
+      const axis = longAxis(object, center);
+      const side = new THREE.Vector3(-axis.z, 0, axis.x);
+      const dir = side.applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(25))
+        .multiplyScalar(Math.cos(THREE.MathUtils.degToRad(30)))
+        .add(new THREE.Vector3(0, Math.sin(THREE.MathUtils.degToRad(30)), 0))
+        .normalize();
+      camera.near = Math.max(radius / 1000, 0.01);
+      camera.far = radius * 20;
+      camera.updateProjectionMatrix();
+      home.target.copy(center);
+      home.position.copy(center).addScaledVector(dir, fit);
+      controls.minDistance = radius * 0.05;
+      controls.maxDistance = fit * 3;
+      // sol baixo, vindo do lado da câmera e um pouco de lado: fachada iluminada, com volumes marcados
+      const sunDir = new THREE.Vector3(dir.x, 0, dir.z).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(-50));
+      sun.position.copy(center).addScaledVector(sunDir, radius * 1.4).add(new THREE.Vector3(0, radius * 1.1, 0));
+      sun.target.position.copy(center);
+      scene.add(sun.target);
+      fill.position.copy(center).addScaledVector(sunDir, -radius).add(new THREE.Vector3(0, radius * 0.6, 0));
+      fill.target.position.copy(center);
+      scene.add(fill.target);
+      fitToScreen(object);
+      controls.maxDistance = home.position.distanceTo(home.target) * 3;
+      goHome();
+    }
+    // Ajusta a distância para o modelo ocupar ~90% da tela (em pé ou deitada).
+    function fitToScreen(object) {
+      // usa pontos do próprio modelo (não a caixa envolvente, que fica folgada quando o prédio está na diagonal)
+      const corners = [];
+      object.updateWorldMatrix(true, true);
+      object.traverse((m) => {
+        if (!m.isMesh) return;
+        const pos = m.geometry.attributes.position;
+        const step = Math.max(1, Math.floor(pos.count / 3000));
+        for (let i = 0; i < pos.count; i += step) corners.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld));
+      });
+      for (let i = 0; i < 4; i++) {
+        camera.position.copy(home.position); camera.lookAt(home.target); camera.updateMatrixWorld();
+        let ex = 0, ey = 0;
+        for (const c of corners) { const p = c.clone().project(camera); ex = Math.max(ex, Math.abs(p.x)); ey = Math.max(ey, Math.abs(p.y)); }
+        const k = Math.max(ex / 0.92, ey / 0.75); // deixa espaço para o topo e a dica embaixo
+        home.position.sub(home.target).multiplyScalar(k).add(home.target);
+      }
+    }
+
+    function goHome() {
+      camera.position.copy(home.position);
+      controls.target.copy(home.target);
+      controls.update();
+      requestRender();
+    }
+    document.getElementById('reset').addEventListener('click', goHome);    // ---------- carregar ----------
+    function show(model) {
+      scene.add(model);
+      frame(model);
+      statusEl.classList.add('hide');
+      setTimeout(() => hintEl.classList.add('hide'), 6000);
+    }
+    const onProgress = (ev) => {
+      if (ev.lengthComputable) progressEl.style.width = (ev.loaded / ev.total * 100).toFixed(0) + '%';
+    };
+
+    // Geometria sem materiais (STL ou Draco puro): acabamento claro, estilo maquete.
+    // flatShading calcula a iluminação de cada face na placa de vídeo, então o arquivo não precisa trazer normais.
+    function showGeometry(geometry) {
+      const material = new THREE.MeshStandardMaterial({ color: 0xd9d3c8, roughness: 0.9, metalness: 0, flatShading: true, envMapIntensity: 0.3,
+        // o modelo exportado tem faces com a orientação invertida (ex.: telhados);
+        // desenhar os dois lados faz tudo aparecer, como no render do 3ds Max
+        side: THREE.DoubleSide });
+      const mesh = new THREE.Mesh(geometry, material);
+      // o 3ds Max usa Z para cima; a web usa Y
+      mesh.rotation.x = -Math.PI / 2;
+      const group = new THREE.Group();
+      group.add(mesh);
+      show(group);
+    }
+
+    const draco = new DRACOLoader();
+    draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/gltf/');
+
+    let loader, onLoad;
+    if (/\.drc(\?|$)/i.test(MODEL_URL)) {
+      loader = draco;
+      onLoad = showGeometry;
+    } else if (/\.stl(\?|$)/i.test(MODEL_URL)) {
+      // leitores extras só são baixados quando necessários
+      const { STLLoader } = await import('three/addons/loaders/STLLoader.js');
+      loader = new STLLoader();
+      onLoad = showGeometry;
+    } else {
+      const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+      loader = new GLTFLoader();
+      loader.setDRACOLoader(draco);
+      onLoad = (gltf) => show(gltf.scene);
+    }
+
+    loader.load(
+      MODEL_URL,
+      onLoad,
+      onProgress,
+      (err) => {
+        console.error(err);
+        statusEl.classList.add('error');
+        document.getElementById('status-title').textContent = 'Não foi possível carregar o modelo 3D.';
+        document.getElementById('status-text').textContent = 'Verifique sua conexão e tente novamente.';
+      }
+    );
+
+    // esconde a dica assim que a pessoa interage
+    renderer.domElement.addEventListener('pointerdown', () => hintEl.classList.add('hide'), { once: true });
+  </script>
+</body>
+</html>

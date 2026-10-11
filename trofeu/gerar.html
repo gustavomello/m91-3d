@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Troféu · gerar modelo-base</title>
+  <style>body { font-family: system-ui, sans-serif; margin: 24px; color: #15203a; } pre { background: #f2f5fa; padding: 12px; border-radius: 8px; white-space: pre-wrap; } button { font: inherit; font-weight: 700; padding: 10px 18px; border-radius: 999px; border: 0; background: #284085; color: #fff; cursor: pointer; }</style>
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+  </script>
+</head>
+<body>
+  <h1>Gerar modelo-base do troféu</h1>
+  <p>Precisa rodar pelo servidor local (lê os arquivos originais em <code>fontes/</code>). Leva cerca de 1 minuto.</p>
+  <button id="go">Gerar</button>
+  <pre id="log"></pre>
+  <script type="module">
+    import { gerarBase } from './gerar-base.js';
+    import * as L from './trofeu-lib.js';
+    const logEl = document.getElementById('log');
+    const log = (t) => { logEl.textContent += t + '\n'; };
+    async function save(name, data) {
+      // grava pelo servidor local; se não der, baixa o arquivo
+      try { const r = await fetch('/__save/trofeu/' + name, { method: 'PUT', body: data }); if (r.ok) return log('Salvo: ' + name); } catch {}
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data])); a.download = name; a.click(); log('Baixado: ' + name);
+    }
+    async function run() {
+      const t0 = performance.now();
+      const { geometry, layout, info, files, preview } = await gerarBase(log);
+      await save('trofeu-base.stl', L.toSTL(geometry));
+      await save('trofeu-base.json', JSON.stringify(layout, null, 2));
+      // placas fixas, deitadas e alinhadas entre si: importar juntas no fatiador e dar uma cor a cada arquivo
+      await save('placas-fixas-1-fundo.stl', L.toSTL(files.tiles));
+      await save('placas-fixas-2-amarelo-jardim-dos-ipes.stl', L.toSTL(files.amarelo));
+      await save('placas-fixas-3-azul-m91.stl', L.toSTL(files.azul));
+      // placas fixas já encaixadas, só para a prévia colorida da ferramenta de personalização
+      await save('previa-fundo.stl', L.toSTL(preview.fundo));
+      await save('previa-amarelo.stl', L.toSTL(preview.amarelo));
+      await save('previa-azul.stl', L.toSTL(preview.azul));
+      log('\n' + JSON.stringify(info, null, 2));
+      log(`\nPronto em ${((performance.now() - t0) / 1000).toFixed(0)} s.`);
+      window.__done = info;
+    }
+    document.getElementById('go').addEventListener('click', run);
+    window.gerar = run;
+  </script>
+</body>
+</html>

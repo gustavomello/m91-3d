@@ -1,0 +1,6 @@
+# Acima do limite do GitHub (100 MB): fica só no computador / OneDrive
+fontes/jardim-dos-ipes.stl
+*.max
+
+# Configuração local do Claude
+.claude/

@@ -1,25 +1,39 @@
-// Gera o MODELO-BASE do troféu (prédio + base + logos fixos + moldura vazia da imobiliária).
-// Rodar uma vez; a personalização (imobiliária + posição) é feita depois em personalizar.html.
+// Troféu em duas fases:
+//  1. prepararPredio(): corta o prédio da direita do modelo original, simplifica para impressão e fecha a empena.
+//     Rodar uma vez (preparar.html); grava predio-simplificado.stl + predio-simplificado.json.
+//  2. gerarBase(): lê o prédio preparado e monta a base, os rebaixos e as placas fixas (gerar.html).
+// A personalização (imobiliária + posição) é feita depois em personalizar.html.
 import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import * as BGU from 'three/addons/utils/BufferGeometryUtils.js';
 import * as L from './trofeu-lib.js';
 
-export const LAYOUT = {
+// fase 1: só vale depois de rodar "Preparar prédio" de novo
+export const PREPARO = {
   escala: 0.1,            // 1:100 -> cm reais viram mm
   cutFromStart: 5750,     // cm: meio da junta entre o 3º e o 4º prédio
   platibanda: 1510,       // cm: altura da platibanda (medida em todo o perímetro)
   empena: [-1.5, 2.0],    // mm: espessura da empena em relação ao corte
-  margem: 8,              // mm: base além do prédio
-  alturaBase: 45,         // mm
   minPlaca: 1.0,          // mm: placas finas (guarda-corpos, vidros) passam a ter esta espessura
   minLinha: 0.8,          // mm: barras com duas dimensões abaixo disso são removidas
   minPeca: 1.0,           // mm: peças com todas as dimensões abaixo disso são removidas
 };
 
-export async function gerarBase(log = console.log) {
-  const S = LAYOUT.escala;
-  const info = {};
+// fase 2
+export const LAYOUT = {
+  margem: 8,              // mm: base além do prédio
+  alturaBase: 45,         // mm
+};
+
+const PREDIO_STL = new URL('./predio-simplificado.stl', import.meta.url);
+const PREDIO_JSON = new URL('./predio-simplificado.json', import.meta.url);
+
+/**
+ * Fase 1: prédio da direita cortado, simplificado e com o miolo da empena (alas fechadas até a platibanda).
+ * A camada externa da empena, que tem o rebaixo do símbolo M91, fica para gerarBase().
+ */
+export async function prepararPredio(log = console.log) {
+  const S = PREPARO.escala;
 
   // ---------- 1. corta o prédio da direita no meio da junta ----------
   const Bm = await cortarPredio(log);
@@ -27,8 +41,7 @@ export async function gerarBase(log = console.log) {
   // ---------- 2. simplificação para impressão ----------
   log('Simplificando peças finas para impressão…');
   const simp = simplificar(Bm);
-  info.simplificacao = simp.stats;
-  const building = simp.building, extra = simp.extra;
+  const building = simp.building;
   building.computeBoundingBox(); const bb = building.boundingBox;
 
   // ---------- 3. empena com topo horizontal na altura da platibanda ----------
@@ -47,9 +60,37 @@ export async function gerarBase(log = console.log) {
   const cols = []; for (let x = 0; x < W; x++) { let any = false; for (let y = 0; y < H; y++) if (!outside[y * W + x]) { any = true; break; } cols.push(any); }
   const wings = []; let start = -1;
   cols.forEach((c, x) => { if (c && start < 0) start = x; if ((!c || x === W - 1) && start >= 0) { const end = c ? x + 1 : x; if (end - start > 10) wings.push([(start - 1) * cell + bb.min.y, (end - 1) * cell + bb.min.y]); start = -1; } });
-  const top = LAYOUT.platibanda * S, [e0, e1] = LAYOUT.empena, T = L.PLATE_T;
-  const parts = [building, ...extra];
+  const top = PREPARO.platibanda * S, [e0, e1] = PREPARO.empena, T = L.PLATE_T;
+  // miolo das alas; a camada externa (e0 .. e0 + T) é montada em gerarBase()
+  const nucleo = wings.map(([a, b]) => L.box(e0 + T, e1, a, b, 0, top));
+
+  return {
+    geometry: L.merge([building, ...simp.extra, ...nucleo]),
+    dados: {
+      versao: 1,
+      predioBbox: { min: bb.min.toArray(), max: bb.max.toArray() }, // só o prédio, sem empena nem painéis
+      empena: { x0: e0, nucleoX0: e0 + T, x1: e1, topo: top, alas: wings },
+      simplificacao: simp.stats,
+    },
+  };
+}
+
+/** Fase 2: base + rebaixos + placas fixas, a partir do prédio preparado. */
+export async function gerarBase(log = console.log) {
+  const info = {};
+
+  log('Lendo o prédio preparado…');
+  const [rs, rj] = await Promise.all([fetch(PREDIO_STL), fetch(PREDIO_JSON)]);
+  if (!rs.ok || !rj.ok) throw new Error('Falta predio-simplificado.stl/.json: rode "Preparar prédio" primeiro.');
+  const pred = await rj.json();
+  if (pred.versao !== 1) throw new Error('predio-simplificado.json é de outra versão: rode "Preparar prédio" de novo.');
+  const building = L.positionsOnly(new STLLoader().parse(await rs.arrayBuffer()));
+  const bb = new THREE.Box3(new THREE.Vector3(...pred.predioBbox.min), new THREE.Vector3(...pred.predioBbox.max));
+  const { x0: e0, nucleoX0, topo: top, alas: wings } = pred.empena, T = L.PLATE_T;
+  if (Math.abs(nucleoX0 - e0 - T) > 1e-6) throw new Error('PLATE_T mudou desde a preparação do prédio: rode "Preparar prédio" de novo.');
+  info.simplificacao = pred.simplificacao;
   info.empena = wings.map(([a, b]) => +(b - a).toFixed(1) + ' mm');
+  const parts = [building];
 
   // ---------- 4. base e placas ----------
   // Os logos viram PLACAS impressas deitadas (fundo neutro + relevo colorido) e encaixadas em rebaixos.
@@ -72,12 +113,11 @@ export async function gerarBase(log = console.log) {
   parts.push(L.slabWithPockets(bw, BH, [{ ...jdiAt, ...jdiP }, { ...imoAt, ...imoP }], T, new THREE.Vector3(cxB, base.y0, zc), front.h, front.v, front.out));
   parts.push(L.slabWithPockets(bw, BH, [{ cx: 0, cy: 0, ...m91P }], T, new THREE.Vector3(cxB, base.y1, zc), back.h, back.v, back.out));
 
-  // empena: núcleo das alas + camada externa; a maior ala recebe o rebaixo do símbolo M91
+  // empena: o miolo das alas já vem no prédio preparado; aqui só a camada externa, a maior ala recebe o rebaixo do símbolo M91
   const wingList = wings.map(([a, b]) => ({ a, b, w: b - a }));
   const big = [...wingList].sort((p, q) => q.w - p.w)[0];
   const symP = { w: Math.min(40, big.w - 8), h: 30 }, symZ = top * 0.72;
   for (const wg of wingList) {
-    parts.push(L.box(e0 + T, e1, wg.a, wg.b, 0, top));
     const holes = wg === big ? [{ cx: 0, cy: symZ - top / 2, ...symP }] : [];
     // olhando de -X, h aponta para -Y: o centro da ala em h é -(a+b)/2
     parts.push(L.slabWithPockets(wg.w, top, holes, T, new THREE.Vector3(e0, (wg.a + wg.b) / 2, top / 2), side.h, side.v, side.out));
@@ -123,12 +163,20 @@ export async function gerarBase(log = console.log) {
   // troféu montado (só para visualizar): base + placas nos rebaixos
   const placed = (k) => [L.placeInPocket(plates[k].tile, pockets[k]), L.placeInPocket(plates[k].relief, pockets[k])];
 
+  // frente justificada: logo do Jardim dos Ipês | posição | logo da imobiliária com espaços iguais entre eles e margem direita = margem esquerda.
+  // Como a largura do logo da imobiliária varia, a distribuição é feita em personalizar.html; aqui vão os limites (relativos ao centro da placa).
+  const jdiLogoW = plates.jardimDosIpes.thin[0].size[0], margemLateral = jdiAt.cx - jdiLogoW / 2 + bw / 2;
   const layout = {
     versao: 2,
     placaT: T, folga: L.PLATE_GAP,
     rebaixos: pockets,
-    // conteúdo da placa personalizada (mm, relativo ao centro da placa)
-    imobiliaria: { w: imoP.w, h: imoP.h, posicao: { fit: [30, 30], at: [-imoP.w / 2 + 4 + 15, 0] }, logo: { fit: [imoP.w - 4 - 30 - 6 - 4, imoP.h - 8], at: [(-imoP.w / 2 + 4 + 30 + 6 + imoP.w / 2 - 4) / 2, 0] } },
+    // conteúdo da placa personalizada (mm, relativo ao centro da placa); "at" é a posição sem justificar
+    imobiliaria: {
+      w: imoP.w, h: imoP.h,
+      posicao: { fit: [30, 30], at: [-imoP.w / 2 + 4 + 15, 0] },
+      logo: { fit: [imoP.w - 4 - 30 - 6 - 4, imoP.h - 8], at: [(-imoP.w / 2 + 4 + 30 + 6 + imoP.w / 2 - 4) / 2, 0] },
+      justificar: { de: jdiAt.cx + jdiLogoW / 2 - imoAt.cx, ate: bw / 2 - margemLateral - imoAt.cx, borda: 4 },
+    },
     tamanhoMm: info.tamanhoMm,
   };
   info.espacoLogoImobiliariaMm = layout.imobiliaria.logo.fit.map(v => +v.toFixed(1));
@@ -195,7 +243,7 @@ export function orientOutward(geom) {
 
 /** Lê o modelo original e devolve o prédio da direita em mm (X = comprimento, 0 = corte; Y = profundidade; Z = altura, 0 = chão). */
 export async function cortarPredio(log = console.log) {
-  const S = LAYOUT.escala;
+  const S = PREPARO.escala;
   log('Lendo o modelo original…');
   const P0 = new STLLoader().parse(await (await fetch(new URL('../fontes/jardim-dos-ipes.stl', import.meta.url))).arrayBuffer()).attributes.position.array;
   const N0 = P0.length / 3;
@@ -203,7 +251,7 @@ export async function cortarPredio(log = console.log) {
   let sxx = 0, syy = 0, sxy = 0; for (let i = 0; i < P0.length; i += 3) { const x = P0[i] - mx, y = P0[i + 1] - my; sxx += x * x; syy += y * y; sxy += x * y; }
   const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy), ux = Math.cos(ang), uy = Math.sin(ang), vx = -uy, vy = ux;
   let umin = 1e9; for (let i = 0; i < P0.length; i += 3) umin = Math.min(umin, (P0[i] - mx) * ux + (P0[i + 1] - my) * uy);
-  const cut = umin + LAYOUT.cutFromStart;
+  const cut = umin + PREPARO.cutFromStart;
   const U = (x, y) => (x - mx) * ux + (y - my) * uy, V = (x, y) => (x - mx) * vx + (y - my) * vy;
   log('Separando o prédio da direita…');
   const keep = [];
@@ -241,14 +289,14 @@ export function simplificar(Bm) {
   const { P, I, Vn, f, comps } = componentes(Bm);
   const stats = { removidasPoeira: 0, gaiolasRemovidas: 0, guardaCorposSolidos: 0, paineisSolidos: 0, barrasRemovidas: 0, engrossadas: 0, mantidas: 0 };
   const panels = []; // caixas sólidas que substituem conjuntos de barras
-  const T1 = LAYOUT.minPlaca;
+  const T1 = PREPARO.minPlaca;
   const list = [...comps.values()];
   for (const b of list) {
     b.d = [0, 1, 2].map(k => b.max[k] - b.min[k]);
     b.c = [0, 1, 2].map(k => (b.max[k] + b.min[k]) / 2);
     const s = [...b.d].sort((a, c) => a - c);
-    b.isBar = s[2] >= LAYOUT.minPeca && s[1] < LAYOUT.minLinha;
-    b.isVertical = b.isBar && b.d[2] >= 4 && b.d[0] < LAYOUT.minLinha && b.d[1] < LAYOUT.minLinha;
+    b.isBar = s[2] >= PREPARO.minPeca && s[1] < PREPARO.minLinha;
+    b.isVertical = b.isBar && b.d[2] >= 4 && b.d[0] < PREPARO.minLinha && b.d[1] < PREPARO.minLinha;
   }
   const overlap = (a, b, e) => { for (let k = 0; k < 3; k++) if (a.min[k] - e > b.max[k] || b.min[k] - e > a.max[k]) return false; return true; };
   const clusterOf = (items, e) => {
@@ -329,7 +377,7 @@ export function simplificar(Bm) {
     if (b.action) continue;
     const order = [0, 1, 2].sort((a, c) => b.d[a] - b.d[c]), [t, , l] = order.map(k => b.d[k]);
     const horizMin = Math.min(b.d[0], b.d[1]), horizMax = Math.max(b.d[0], b.d[1]);
-    if (l < LAYOUT.minPeca) { b.action = 'remove'; stats.removidasPoeira++; }
+    if (l < PREPARO.minPeca) { b.action = 'remove'; stats.removidasPoeira++; }
     // peitoris e pingadeiras: placas horizontais estreitas (até 25 cm reais de profundidade) e finíssimas
     else if (b.d[2] < 0.5 && horizMin < 2.5 && horizMax >= 3) { b.action = 'remove'; stats.peitorisRemovidos = (stats.peitorisRemovidos || 0) + 1; }
     else if (t < T1) { b.action = 'thicken'; b.axis = order[0]; b.center = b.c[order[0]]; b.factor = t > 1e-4 ? T1 / t : null; stats.engrossadas++; }
@@ -344,7 +392,7 @@ export function simplificar(Bm) {
   const extra = []; // placas de espessura zero viram caixas de 1 mm
   for (let t = 0; t < I.length; t += 3) { const b = comps.get(f(I[t])); if (b.action === 'remove') continue; if (b.action === 'thicken' && !b.factor) continue;
     for (let j = 0; j < 3; j++) { const v = I[t + j]; out.push(Pn[v * 3], Pn[v * 3 + 1], Pn[v * 3 + 2]); } }
-  for (const b of zeroThick.values()) { const lo = [...b.min], hi = [...b.max]; lo[b.axis] = b.center - LAYOUT.minPlaca / 2; hi[b.axis] = b.center + LAYOUT.minPlaca / 2; extra.push(L.box(lo[0], hi[0], lo[1], hi[1], lo[2], hi[2])); }
+  for (const b of zeroThick.values()) { const lo = [...b.min], hi = [...b.max]; lo[b.axis] = b.center - PREPARO.minPlaca / 2; hi[b.axis] = b.center + PREPARO.minPlaca / 2; extra.push(L.box(lo[0], hi[0], lo[1], hi[1], lo[2], hi[2])); }
   extra.push(...panels);
   const building = new THREE.BufferGeometry(); building.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
   return { building, extra, stats };

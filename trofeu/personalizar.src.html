@@ -189,18 +189,15 @@
     }
     $('logo').addEventListener('change', async (e) => {
       const f = e.target.files[0]; if (!f) return;
-      setLogo(await L.imageToCanvas(f, 3000, 1200), f.name.replace(/\.[^.]+$/, '').normalize('NFD').replace(/[^\w-]+/g, '-').toLowerCase().slice(0, 30));
+      setLogo(await L.imageToCanvas(f, 3000, 1200), f.name.replace(/\.[^.]+$/, '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '-').toLowerCase().slice(0, 30));
     });
     $('sample').addEventListener('click', async () => {
-      // logo fictício, só para demonstração
-      await document.fonts.load('800 100px "Plus Jakarta Sans"');
-      const c = new OffscreenCanvas(1800, 600), x = c.getContext('2d');
-      x.fillStyle = '#c2410c';
-      x.beginPath(); x.moveTo(60, 300); x.lineTo(270, 90); x.lineTo(480, 300); x.lineTo(430, 300); x.lineTo(430, 520); x.lineTo(110, 520); x.lineTo(110, 300); x.closePath(); x.fill();
-      x.clearRect(230, 380, 80, 140);
-      x.font = '800 150px "Plus Jakarta Sans"'; x.fillText('IMOBILIÁRIA', 540, 300);
-      x.font = '800 190px "Plus Jakarta Sans"'; x.fillText('EXEMPLO', 540, 500);
-      setLogo(c, 'exemplo');
+      // logo de exemplo: Refugium Imobiliária (fontes/logo-refugium.svg; o build-personalizar.ps1 embute o SVG em #logoExemplo)
+      const el = document.getElementById('logoExemplo');
+      const svg = el ? el.textContent.trim() : await (await fetch('../fontes/logo-refugium.svg')).text();
+      // o "imobiliária" pequeno só passa na análise de impressão engrossado
+      $('thick').value = 0.26; $('thickVal').textContent = '0,26';
+      setLogo(await L.imageToCanvas(new Blob([svg], { type: 'image/svg+xml' }), 3000, 1200), 'refugium');
     });
     document.querySelectorAll('.pos button').forEach(b => b.addEventListener('click', () => {
       document.querySelectorAll('.pos button').forEach(o => o.setAttribute('aria-pressed', o === b)); position = b.dataset.pos; rebuild();
@@ -218,9 +215,17 @@
         await document.fonts.load('800 100px "Plus Jakarta Sans"');
         const P = layout.imobiliaria;
         const posMask = L.textToMask([{ text: position, heightMm: 20, weight: 800, family: 'Plus Jakarta Sans' }, { text: 'LUGAR', heightMm: 5, weight: 800, family: 'Plus Jakarta Sans', gapMm: 2 }]);
+        let posAt = P.posicao.at, logoAt = P.logo.at;
+        if (P.justificar) {
+          // logo do Jardim dos Ipês | posição | logo da imobiliária com espaços iguais; o logo encosta na margem direita (= margem esquerda)
+          const { de, ate, borda } = P.justificar, largura = (m, fit) => m.W * Math.min(fit[0] / m.W, fit[1] / m.H);
+          const wp = largura(posMask, P.posicao.fit), wl = largura(logoMask, P.logo.fit), g = (ate - de - wp - wl) / 2;
+          posAt = [Math.max(-P.w / 2 + borda + wp / 2, de + g + wp / 2), P.posicao.at[1]]; // não sai da placa
+          logoAt = [ate - wl / 2, P.logo.at[1]];
+        }
         plate = L.makePlate(P.w, P.h, [
-          { mask: posMask, fit: P.posicao.fit, at: P.posicao.at, thickenMm: 0.05 },
-          { mask: logoMask, fit: P.logo.fit, at: P.logo.at, thickenMm: +$('thick').value },
+          { mask: posMask, fit: P.posicao.fit, at: posAt, thickenMm: 0.05 },
+          { mask: logoMask, fit: P.logo.fit, at: logoAt, thickenMm: +$('thick').value },
         ]);
         persMeshes.splice(0).forEach(m => scene.remove(m));
         const pk = layout.rebaixos.imobiliaria;

@@ -48,7 +48,8 @@ while ($http.IsListening) {
     $res.ContentType = $(if ($tipos[$ext]) { $tipos[$ext] } else { 'application/octet-stream' })
     $res.Headers.Add('Cache-Control', 'no-cache')
     $res.ContentLength64 = $bytes.Length
-    $res.OutputStream.Write($bytes, 0, $bytes.Length)
+    # HEAD pede só os cabeçalhos (o leitor de PDF usa isso)
+    if ($req.HttpMethod -ne 'HEAD') { $res.OutputStream.Write($bytes, 0, $bytes.Length) }
   } catch { Write-Host "  erro: $_" -ForegroundColor Yellow; try { $res.StatusCode = 500 } catch {} }
   try { $res.Close() } catch {}
 }

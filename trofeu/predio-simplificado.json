@@ -1,0 +1,41 @@
+{
+  "versao": 1,
+  "predioBbox": {
+    "min": [
+      -9.094947153254554e-14,
+      -63.662837982177734,
+      0
+    ],
+    "max": [
+      186.2244873046875,
+      59.90157699584961,
+      161.25022888183594
+    ]
+  },
+  "empena": {
+    "x0": -1.5,
+    "nucleoX0": 0.10000000000000009,
+    "x1": 2,
+    "topo": 151,
+    "alas": [
+      [
+        -63.662837982177734,
+        -12.662837982177734
+      ],
+      [
+        9.337162017822266,
+        60.337162017822266
+      ]
+    ]
+  },
+  "simplificacao": {
+    "removidasPoeira": 30,
+    "gaiolasRemovidas": 20,
+    "guardaCorposSolidos": 40,
+    "paineisSolidos": 2,
+    "barrasRemovidas": 90,
+    "engrossadas": 307,
+    "mantidas": 167,
+    "peitorisRemovidos": 20
+  }
+}

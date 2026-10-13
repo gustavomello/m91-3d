@@ -18,6 +18,9 @@ $lib
 $html = [IO.File]::ReadAllText("$dir\personalizar.src.html", $enc)
 $marker = "import * as L from './trofeu-lib.js';"
 if (-not $html.Contains($marker)) { throw "marcador não encontrado em personalizar.src.html" }
+# logo de exemplo (botão "Usar logo de exemplo"), embutido para funcionar sem servidor
+$svg = [IO.File]::ReadAllText("$dir\..\fontes\logo-refugium.svg", $enc).Trim()
+$html = $html.Replace('<script type="module">', "<script type=`"image/svg+xml`" id=`"logoExemplo`">`n$svg`n  </script>`n  <script type=`"module`">")
 $html = $html.Replace($marker, $inline).Replace('<!-- Arquivo-fonte. O personalizar.html (usado de fato) é gerado com a biblioteca embutida: rode build-personalizar.ps1 -->', '<!-- Gerado por build-personalizar.ps1 a partir de personalizar.src.html. Edite o arquivo-fonte, não este. -->')
 [IO.File]::WriteAllText("$dir\personalizar.html", $html, $enc)
 "personalizar.html gerado (" + [int]((Get-Item "$dir\personalizar.html").Length / 1KB) + " KB); funções embutidas: $names"

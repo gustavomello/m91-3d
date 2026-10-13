@@ -16,7 +16,7 @@ O servidor é necessário porque os navegadores não deixam páginas abertas dir
 |---|---|
 | `visualizador/` | Página do visualizador 3D (`index.html`) e o modelo comprimido (`modelos/jardim-dos-ipes.drc`). Pode ser publicada como site estático. |
 | `trofeu/` | Gerador do modelo-base, ferramenta de personalização e os STL para imprimir. |
-| `fontes/` | Arquivos originais: STL exportado do 3ds Max, PDFs do logo do Jardim dos Ipês, PNGs do logo M91. |
+| `fontes/` | Arquivos originais: STL exportado do 3ds Max, PDFs do logo do Jardim dos Ipês, PNGs do logo M91 e o logo da Refugium Imobiliária (PNG original + SVG vetorizado), usado como exemplo de 1º lugar. |
 
 ## Troféu: o que imprimir
 
@@ -32,12 +32,18 @@ As placas encaixam nos rebaixos com 0,2 mm de folga e são coladas.
 
 ## Alterar o troféu
 
-- Medidas, folgas e regras de simplificação: `trofeu/gerar-base.js` (bloco `LAYOUT` no topo e função `simplificar`) e `trofeu/trofeu-lib.js` (`PLATE_T`, `PLATE_GAP`, `RELIEF_MM`, `MIN_FEATURE_MM`).
-- Depois de mudar, abra *Gerar modelo-base de novo*.
+O troféu é gerado em duas fases (código em `trofeu/gerar-base.js`):
+
+1. **Preparar prédio** (`trofeu/preparar.html`): corta 1 dos 4 prédios do modelo original, simplifica para impressão (remove as gaiolas de gás, as pingadeiras e os peitoris, transforma os guarda-corpos em placas sólidas) e fecha a empena.
+   Grava `trofeu/predio-simplificado.stl` + `.json`. Só rode de novo se mudar o STL original, o bloco `PREPARO` ou a função `simplificar`. É a única etapa que precisa do STL de 107 MB.
+2. **Gerar modelo-base** (`trofeu/gerar.html`): parte do prédio preparado e monta a base, os rebaixos (inclusive o do símbolo M91 na empena) e as placas fixas. Medidas no bloco `LAYOUT` e em `trofeu/trofeu-lib.js` (`PLATE_T`, `PLATE_GAP`, `RELIEF_MM`, `MIN_FEATURE_MM`).
+   Se mudar `PLATE_T`, prepare o prédio de novo (o miolo da empena depende dele).
+
+- Depois de mudar algo, abra a fase correspondente (ou as duas, em ordem).
 - Se mudar `trofeu-lib.js` ou `personalizar.src.html`, rode `trofeu/build-personalizar.ps1` para atualizar `personalizar.html` (a versão com a biblioteca embutida).
 
 ## Arquivos grandes
 
 `fontes/jardim-dos-ipes.stl` (107 MB) passa do limite do GitHub (100 MB) e está no `.gitignore`.
-Guarde-o fora do Git (por exemplo, no OneDrive, onde esta pasta já está). Ele só é necessário para gerar o modelo-base de novo.
+Guarde-o fora do Git (por exemplo, no OneDrive, onde esta pasta já está). Ele só é necessário para *Preparar prédio*.
 O arquivo original do 3ds Max (`.max`) não está nesta pasta.

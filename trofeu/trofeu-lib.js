@@ -12,11 +12,18 @@ export const RELIEF_MM = 1.0;      // altura do relevo dos logos
 
 /** Desenha uma imagem (PNG/JPG/SVG/ImageBitmap) num canvas com altura alvo em pixels. */
 export async function imageToCanvas(source, maxW, maxH) {
-  const bmp = source instanceof ImageBitmap ? source : await createImageBitmap(source);
+  const bmp = source instanceof ImageBitmap ? source : source.type === 'image/svg+xml' ? await svgImage(source) : await createImageBitmap(source);
   const k = Math.min(maxW / bmp.width, maxH / bmp.height);
   const c = new OffscreenCanvas(Math.max(1, Math.round(bmp.width * k)), Math.max(1, Math.round(bmp.height * k)));
   c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
   return c;
+}
+
+/** SVG -> <img> (createImageBitmap não decodifica SVG no Chrome); desenhada em qualquer tamanho sem perder nitidez. */
+async function svgImage(blob) {
+  // a URL não é revogada: o Chrome redesenha o SVG a partir dela no drawImage
+  const img = new Image(); img.src = URL.createObjectURL(blob); await img.decode();
+  return img;
 }
 
 /**
